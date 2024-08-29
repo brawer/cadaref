@@ -1,5 +1,7 @@
+use bisection::bisect_left_by;
 use csv::Reader;
-use gdal::Gcp;
+use gdal::{Gcp, GeoTransform};
+use gdal_sys::{GDALGCPsToGeoTransform, GDAL_GCP};
 use rstar::{primitives::GeomWithData, RTree};
 use serde::Deserialize;
 use std::error::Error;
@@ -36,15 +38,9 @@ impl Matcher {
         for (i, p) in points.iter().enumerate() {
             point_tree.insert(PointNode::new([p.x, p.y], i));
         }
-
         let point_distances = build_point_distances(&points);
-        // TODO: Build list of distances between points;
-        // sort by distance; build look-up table from
-        // int(distance) -> index in point-distance table;
-        // write fn points_in_distance(dist: f32) -> iter(pointA, pointB, dist).
 
         let symbols = read_symbols(symbols)?;
-
         let matcher = Matcher {
             points,
             point_distances,
@@ -54,23 +50,55 @@ impl Matcher {
         Ok(matcher)
     }
 
-    pub fn find_matches(&self, meters_per_pixel: f64) {
-        for i in 0..self.symbols.len() {
-            for j in i + 1..self.symbols.len() {
-                let p = &self.symbols[i];
-                let q = &self.symbols[j];
-                let dist_mm = p.distance_mm(q, meters_per_pixel);
-                //let dx = (p.x - q.x) * meters_per_pixel;
-                //let dy = (p.y - q.y) * meters_per_pixel;
-                //let dist_sq = dx*dx + dy*dy;
-                //let dist_mm = (dist_sq.sqrt() * 1000.0 + 0.5) as i32;
+    // Tolerance for considering a potential match as inlier. If a point is
+    // is <= 1 meter away from the projected location, it is considered as
+    // an inlier.
+    const MAX_DISTANCE_MM: i32 = 1000;
 
-                println!(
-                    "i={:?} j={:?} dist_mm={dist_mm}",
-                    self.symbols[i], self.symbols[j]
-                );
+    pub fn find_matches(&self, meters_per_pixel: f64) {
+        let num_symbols = self.symbols.len();
+        println!("start");
+        let mut n = 0;
+        for i in 0..num_symbols {
+            for j in (i + 1)..num_symbols {
+                let s1 = &self.symbols[i];
+                let s2 = &self.symbols[j];
+                let dist_mm = s1.distance_mm(s2, meters_per_pixel);
+                let min_dist_mm = dist_mm - Self::MAX_DISTANCE_MM;
+                let max_dist_mm = dist_mm + Self::MAX_DISTANCE_MM;
+                let start = bisect_left_by(&self.point_distances, |p| p.0.cmp(&min_dist_mm));
+                for it in self.point_distances[start..].iter() {
+                    if it.0 > max_dist_mm {
+                        break;
+                    }
+                    let p1 = &self.points[it.1 as usize];
+                    let p2 = &self.points[it.2 as usize];
+                    if let Some(tr) = make_transform(&s1, &p1, &s2, &p2) {
+                        n += self.count_inliers(&tr);
+                    }
+                    if let Some(tr) = make_transform(&s1, &p2, &s2, &p1) {
+                        n += self.count_inliers(&tr);
+                    }
+                }
             }
         }
+        println!("end {n}");
+    }
+
+    fn count_inliers(&self, gt: &GeoTransform) -> usize {
+        let mut count = 0;
+        for sym in self.symbols.iter() {
+            let (x, y) = sym.project(gt);
+            // TODO: Find closest point in rtree, compute distance,
+            // see if it is within tolerance.
+            // TODO: build querypoint p from (x, y)
+            // tree.nearest_neighbor_iter_with_distance_2(p)
+            if sym.x == 721.25 && sym.y == 824.0 {
+                println!("{:?} x={x} y={y}", sym);
+                count += 1;
+            }
+        }
+        count + 1
     }
 }
 
@@ -81,6 +109,15 @@ impl Symbol {
         let dist_sq = dx * dx + dy * dy;
 
         (dist_sq.sqrt() * 1000.0 + 0.5) as i32
+    }
+
+    pub fn project(&self, gt: &GeoTransform) -> (f64, f64) {
+        // https://gdal.org/en/latest/tutorials/geotransforms_tut.html
+        // X_geo = GT(0) + X_pixel * GT(1) + Y_line * GT(2)
+        // Y_geo = GT(3) + X_pixel * GT(4) + Y_line * GT(5)
+        let x = gt[0] + self.x * gt[1] + self.y * gt[2];
+        let y = gt[3] + self.x * gt[4] + self.y * gt[5];
+        (x, y)
     }
 }
 
@@ -159,6 +196,38 @@ fn make_gcp(s: &Symbol, p: &Point) -> Gcp {
         x: p.x,
         y: p.y,
         z: 0.,
+    }
+}
+
+// Create a GDAL transform. Returns None for some corner cases,
+// such as two symbols having the exact same y coordinate.
+fn make_transform(s1: &Symbol, p1: &Point, s2: &Symbol, p2: &Point) -> Option<GeoTransform> {
+    let mut result = [0.0; 6];
+    let gcps = vec![
+        GDAL_GCP {
+            pszId: std::ptr::null_mut(),
+            pszInfo: std::ptr::null_mut(),
+            dfGCPPixel: s1.x,
+            dfGCPLine: s1.y,
+            dfGCPX: p1.x,
+            dfGCPY: p1.y,
+            dfGCPZ: 0.0,
+        },
+        GDAL_GCP {
+            pszId: std::ptr::null_mut(),
+            pszInfo: std::ptr::null_mut(),
+            dfGCPPixel: s2.x,
+            dfGCPLine: s2.y,
+            dfGCPX: p2.x,
+            dfGCPY: p2.y,
+            dfGCPZ: 0.0,
+        },
+    ];
+    let ok = unsafe { GDALGCPsToGeoTransform(2, gcps.as_ptr(), result.as_mut_ptr(), 0) != 0 };
+    if ok {
+        Some(result)
+    } else {
+        None
     }
 }
 
