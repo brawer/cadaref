@@ -132,6 +132,8 @@ impl Matcher {
         println!("final_score={:?} for {:?}", refined_score, refined);
     }
 
+    // TODO: Refactor the common logic of score_transform() and refine_transform()
+    // into a single place. Maybe an iterator over (&Symbol, &Point) tuples?
     fn score_transform(&self, gt: &GeoTransform) -> Score {
         // Must be kept in sync with refine_transform().
         let max_dist_m = (Self::MAX_DISTANCE_MM as f64) / 1000.0;
@@ -170,23 +172,33 @@ impl Matcher {
         let max_dist_m = (Self::MAX_DISTANCE_MM as f64) / 1000.0;
         let max_dist_sq = max_dist_m * max_dist_m;
 
-        //let gcps = Vec::with_capacity(self.symbols.len());
+        let mut gcps = Vec::with_capacity(self.symbols.len());
         for sym in self.symbols.iter() {
             let (x, y) = sym.project(gt);
-            for (_p, dist_sq) in self
+            for (p, dist_sq) in self
                 .point_tree
                 .nearest_neighbor_iter_with_distance_2(&[x, y])
             {
                 if dist_sq > max_dist_sq {
                     break;
                 }
+
+                // TODO: Once we have symbol types, guard the
+                // following by "if sym.type == p.type {...}".
                 if true {
-                    // TODO: Implement.
+                    gcps.push(make_gcp(sym, &self.points[p.data]));
                     break;
                 }
             }
         }
-        *gt
+
+        let mut result = [0.0; 6];
+        let ok = unsafe { GDALGCPsToGeoTransform(2, gcps.as_ptr(), result.as_mut_ptr(), 0) != 0 };
+        if ok {
+            result
+        } else {
+            *gt
+        }
     }
 }
 
