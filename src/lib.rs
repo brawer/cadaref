@@ -31,6 +31,24 @@ pub struct Matcher {
     symbols: Vec<Symbol>,
 }
 
+#[derive(Copy, Clone, Debug)]
+struct Score {
+    num_matches: usize,
+    sum_dist_sq: f64,
+}
+
+impl Score {
+    fn better_than(&self, other: &Self) -> bool {
+        if self.num_matches > other.num_matches {
+            return true;
+        }
+        if self.num_matches < other.num_matches {
+            return false;
+        }
+        self.sum_dist_sq < other.sum_dist_sq
+    }
+}
+
 impl Matcher {
     pub fn new(points: PathBuf, symbols: PathBuf) -> Result<Self, Box<dyn Error>> {
         let points = read_points(points)?;
@@ -53,7 +71,7 @@ impl Matcher {
         Ok(matcher)
     }
 
-    // Tolerance for considering a potential match as inlier. If a point is
+    // Tolerance for considering a potential match as inlier. If a point
     // is <= 1 meter away from the projected location, it is considered as
     // an inlier.
     const MAX_DISTANCE_MM: i32 = 1000;
@@ -61,9 +79,21 @@ impl Matcher {
     pub fn find_matches(&self, meters_per_pixel: f64) {
         let num_symbols = self.symbols.len();
         println!("start");
-        let mut n = 0;
-        for i in 0..num_symbols {
-            for j in (i + 1)..num_symbols {
+
+        let mut best_transform = [0.0; 6];
+        let mut best_score = Score {
+            num_matches: 0,
+            sum_dist_sq: 0.0,
+        };
+
+        const MAX_MATCHES: usize = 10;
+        for i in 0..num_symbols.max(MAX_MATCHES) {
+            let mut start = i + 1;
+            if num_symbols - start > MAX_MATCHES {
+                start = num_symbols - MAX_MATCHES;
+            }
+
+            for j in start..num_symbols {
                 let s1 = &self.symbols[i];
                 let s2 = &self.symbols[j];
                 let dist_mm = s1.distance_mm(s2, meters_per_pixel);
@@ -77,31 +107,86 @@ impl Matcher {
                     let p1 = &self.points[it.1 as usize];
                     let p2 = &self.points[it.2 as usize];
                     if let Some(tr) = make_transform(s1, p1, s2, p2) {
-                        n += self.count_inliers(&tr);
+                        let score = self.score_transform(&tr);
+                        if score.better_than(&best_score) {
+                            best_transform = tr;
+                            best_score = score;
+                            // println!("best_score={:?}", score)
+                        }
                     }
                     if let Some(tr) = make_transform(s1, p2, s2, p1) {
-                        n += self.count_inliers(&tr);
+                        let score = self.score_transform(&tr);
+                        if score.better_than(&best_score) {
+                            best_transform = tr;
+                            best_score = score;
+                            // println!("best_score={:?}", score);
+                        }
                     }
                 }
             }
         }
-        println!("end {n}");
+
+        let refined = self.refine_transform(&best_transform);
+        let refined_score = self.score_transform(&refined);
+        println!("best_score={:?} for {:?}", best_score, best_transform);
+        println!("final_score={:?} for {:?}", refined_score, refined);
     }
 
-    fn count_inliers(&self, gt: &GeoTransform) -> usize {
-        let mut count = 0;
+    fn score_transform(&self, gt: &GeoTransform) -> Score {
+        // Must be kept in sync with refine_transform().
+        let max_dist_m = (Self::MAX_DISTANCE_MM as f64) / 1000.0;
+        let max_dist_sq = max_dist_m * max_dist_m;
+
+        let mut num_matches = 0;
+        let mut sum_dist_sq = 0.0;
         for sym in self.symbols.iter() {
             let (x, y) = sym.project(gt);
-            // TODO: Find closest point in rtree, compute distance,
-            // see if it is within tolerance.
-            // TODO: build querypoint p from (x, y)
-            // tree.nearest_neighbor_iter_with_distance_2(p)
-            if sym.x == 721.25 && sym.y == 824.0 {
-                println!("{:?} x={x} y={y}", sym);
-                count += 1;
+            for (_p, dist_sq) in self
+                .point_tree
+                .nearest_neighbor_iter_with_distance_2(&[x, y])
+            {
+                if dist_sq > max_dist_sq {
+                    break;
+                }
+
+                // TODO: Once we have symbol types, guard the
+                // following by "if sym.type == p.type {...}".
+                if true {
+                    num_matches += 1;
+                    sum_dist_sq += dist_sq;
+                    break;
+                }
             }
         }
-        count + 1
+
+        Score {
+            num_matches,
+            sum_dist_sq,
+        }
+    }
+
+    fn refine_transform(&self, gt: &GeoTransform) -> GeoTransform {
+        // Must be kept in sync with score_transform().
+        let max_dist_m = (Self::MAX_DISTANCE_MM as f64) / 1000.0;
+        let max_dist_sq = max_dist_m * max_dist_m;
+
+        //let gcps = Vec::with_capacity(self.symbols.len());
+        for sym in self.symbols.iter() {
+            let (x, y) = sym.project(gt);
+            for (_p, dist_sq) in self
+                .point_tree
+                .nearest_neighbor_iter_with_distance_2(&[x, y])
+            {
+                if dist_sq > max_dist_sq {
+                    break;
+                }
+                if true {
+                    // TODO: Implement.
+                    break;
+                }
+            }
+        }
+        *gt
     }
 }
 
