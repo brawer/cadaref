@@ -73,10 +73,10 @@ impl Matcher {
                     }
                     let p1 = &self.points[it.1 as usize];
                     let p2 = &self.points[it.2 as usize];
-                    if let Some(tr) = make_transform(&s1, &p1, &s2, &p2) {
+                    if let Some(tr) = make_transform(s1, p1, s2, p2) {
                         n += self.count_inliers(&tr);
                     }
-                    if let Some(tr) = make_transform(&s1, &p2, &s2, &p1) {
+                    if let Some(tr) = make_transform(s1, p2, s2, p1) {
                         n += self.count_inliers(&tr);
                     }
                 }
@@ -203,7 +203,7 @@ fn make_gcp(s: &Symbol, p: &Point) -> Gcp {
 // such as two symbols having the exact same y coordinate.
 fn make_transform(s1: &Symbol, p1: &Point, s2: &Symbol, p2: &Point) -> Option<GeoTransform> {
     let mut result = [0.0; 6];
-    let gcps = vec![
+    let gcps = [
         GDAL_GCP {
             pszId: std::ptr::null_mut(),
             pszInfo: std::ptr::null_mut(),
