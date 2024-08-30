@@ -1,6 +1,6 @@
 use bisection::bisect_left_by;
 use csv::Reader;
-use gdal::{Gcp, GeoTransform};
+use gdal::GeoTransform;
 use gdal_sys::{GDALGCPsToGeoTransform, GDAL_GCP};
 use rstar::{primitives::GeomWithData, RTree};
 use serde::Deserialize;
@@ -275,15 +275,15 @@ fn sort_symbols(symbols: &mut [Symbol]) {
     });
 }
 
-fn make_gcp(s: &Symbol, p: &Point) -> Gcp {
-    Gcp {
-        id: p.id.clone(),
-        info: String::new(),
-        pixel: s.x,
-        line: s.y,
-        x: p.x,
-        y: p.y,
-        z: 0.,
+fn make_gcp(s: &Symbol, p: &Point) -> GDAL_GCP {
+    GDAL_GCP {
+        pszId: std::ptr::null_mut(),
+        pszInfo: std::ptr::null_mut(),
+        dfGCPPixel: s.x,
+        dfGCPLine: s.y,
+        dfGCPX: p.x,
+        dfGCPY: p.y,
+        dfGCPZ: 0.0,
     }
 }
 
@@ -291,26 +291,7 @@ fn make_gcp(s: &Symbol, p: &Point) -> Gcp {
 // such as two symbols having the exact same y coordinate.
 fn make_transform(s1: &Symbol, p1: &Point, s2: &Symbol, p2: &Point) -> Option<GeoTransform> {
     let mut result = [0.0; 6];
-    let gcps = [
-        GDAL_GCP {
-            pszId: std::ptr::null_mut(),
-            pszInfo: std::ptr::null_mut(),
-            dfGCPPixel: s1.x,
-            dfGCPLine: s1.y,
-            dfGCPX: p1.x,
-            dfGCPY: p1.y,
-            dfGCPZ: 0.0,
-        },
-        GDAL_GCP {
-            pszId: std::ptr::null_mut(),
-            pszInfo: std::ptr::null_mut(),
-            dfGCPPixel: s2.x,
-            dfGCPLine: s2.y,
-            dfGCPX: p2.x,
-            dfGCPY: p2.y,
-            dfGCPZ: 0.0,
-        },
-    ];
+    let gcps = [make_gcp(s1, p1), make_gcp(s2, p2)];
     let ok = unsafe { GDALGCPsToGeoTransform(2, gcps.as_ptr(), result.as_mut_ptr(), 0) != 0 };
     if ok {
         Some(result)
@@ -386,13 +367,14 @@ mod tests {
                 y: 1251033.022,
             },
         );
-        assert_eq!(gcp.id, "HGF4845");
-        assert_eq!(gcp.info, "");
-        assert_eq!(gcp.pixel, 1723.25);
-        assert_eq!(gcp.line, 3282.0);
-        assert_eq!(gcp.x, 2679878.122);
-        assert_eq!(gcp.y, 1251033.022);
-        assert_eq!(gcp.z, 0.0);
+
+        // assert_eq!(gcp.id, "HGF4845");
+        // assert_eq!(gcp.info, "");
+        assert_eq!(gcp.dfGCPPixel, 1723.25);
+        assert_eq!(gcp.dfGCPLine, 3282.0);
+        assert_eq!(gcp.dfGCPX, 2679878.122);
+        assert_eq!(gcp.dfGCPY, 1251033.022);
+        assert_eq!(gcp.dfGCPZ, 0.0);
     }
 
     #[test]
