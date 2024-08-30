@@ -34,13 +34,16 @@ pub struct Matcher {
 impl Matcher {
     pub fn new(points: PathBuf, symbols: PathBuf) -> Result<Self, Box<dyn Error>> {
         let points = read_points(points)?;
-        let mut point_tree = RTree::new();
-        for (i, p) in points.iter().enumerate() {
-            point_tree.insert(PointNode::new([p.x, p.y], i));
-        }
+        let symbols = read_symbols(symbols)?;
+
+        let nodes = points
+            .iter()
+            .enumerate()
+            .map(|(i, p)| PointNode::new([p.x, p.y], i))
+            .collect();
+        let point_tree = RTree::bulk_load(nodes);
         let point_distances = build_point_distances(&points);
 
-        let symbols = read_symbols(symbols)?;
         let matcher = Matcher {
             points,
             point_distances,
