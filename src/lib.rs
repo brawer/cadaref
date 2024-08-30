@@ -86,8 +86,8 @@ impl Matcher {
             sum_dist_sq: 0.0,
         };
 
-        const MAX_MATCHES: usize = 10;
-        for i in 0..num_symbols.max(MAX_MATCHES) {
+        const MAX_MATCHES: usize = 30;
+        for i in 0..num_symbols.min(MAX_MATCHES) {
             let mut start = i + 1;
             if num_symbols - start > MAX_MATCHES {
                 start = num_symbols - MAX_MATCHES;
