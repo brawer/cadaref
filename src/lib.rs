@@ -32,9 +32,9 @@ pub struct Matcher {
 }
 
 #[derive(Copy, Clone, Debug)]
-struct Score {
+pub struct Score {
     num_matches: usize,
-    sum_dist_sq: f64,
+    avg_dist: f64,
 }
 
 impl Score {
@@ -45,7 +45,7 @@ impl Score {
         if self.num_matches < other.num_matches {
             return false;
         }
-        self.sum_dist_sq < other.sum_dist_sq
+        self.avg_dist < other.avg_dist
     }
 }
 
@@ -76,14 +76,13 @@ impl Matcher {
     // an inlier.
     const MAX_DISTANCE_MM: i32 = 1000;
 
-    pub fn find_matches(&self, meters_per_pixel: f64) {
+    pub fn find_matches(&self, meters_per_pixel: f64) -> Option<(GeoTransform, Score)> {
         let num_symbols = self.symbols.len();
-        println!("start");
 
         let mut best_transform = [0.0; 6];
         let mut best_score = Score {
             num_matches: 0,
-            sum_dist_sq: 0.0,
+            avg_dist: 0.0,
         };
 
         const MAX_MATCHES: usize = 30;
@@ -126,10 +125,15 @@ impl Matcher {
             }
         }
 
-        let refined = self.refine_transform(&best_transform);
-        let refined_score = self.score_transform(&refined);
-        println!("best_score={:?} for {:?}", best_score, best_transform);
-        println!("final_score={:?} for {:?}", refined_score, refined);
+        // At least half of symbols should match, otherwise we have
+        // no trust in the result.
+        if best_score.num_matches >= num_symbols / 2 {
+            let result = self.refine_transform(&best_transform);
+            let score = self.score_transform(&result);
+            Some((result, score))
+        } else {
+            None
+        }
     }
 
     // TODO: Refactor the common logic of score_transform() and refine_transform()
@@ -140,7 +144,7 @@ impl Matcher {
         let max_dist_sq = max_dist_m * max_dist_m;
 
         let mut num_matches = 0;
-        let mut sum_dist_sq = 0.0;
+        let mut sum_dist = 0.0;
         for sym in self.symbols.iter() {
             let (x, y) = sym.project(gt);
             for (_p, dist_sq) in self
@@ -155,15 +159,25 @@ impl Matcher {
                 // following by "if sym.type == p.type {...}".
                 if true {
                     num_matches += 1;
-                    sum_dist_sq += dist_sq;
+                    // In benchmarks, computing the square root did
+                    // not lead to any measureable difference in speed.
+                    // Since the average distance of matches is
+                    // a meaningful metric, whereas the summed squares
+                    // are more difficult to interpret over a dataset
+                    // with wildly varying num_matches, we do compute
+                    // the square root here.
+                    sum_dist += dist_sq.sqrt();
                     break;
                 }
             }
         }
 
+        // We always have at least two matches due to the way how
+        // the candidate transforms are constructed, so the division
+        // by num_matches is safe.
         Score {
             num_matches,
-            sum_dist_sq,
+            avg_dist: sum_dist / (num_matches as f64),
         }
     }
 
@@ -194,7 +208,18 @@ impl Matcher {
 
         let mut result = [0.0; 6];
         let ok = unsafe { GDALGCPsToGeoTransform(2, gcps.as_ptr(), result.as_mut_ptr(), 0) != 0 };
-        if ok {
+        if !ok {
+            return *gt;
+        }
+
+        // When GDAL computes a transform from *all* matching Ground Control Points,
+        // the result can be worse than our own, initial estimate that was just
+        // computed from two points. We threfore check the quality of the refinement,
+        // and return the refined, GDAL-estimated transform only if it s actually
+        // better than our own.
+        let score = self.score_transform(&result);
+        let unrefined_score = self.score_transform(gt);
+        if score.better_than(&unrefined_score) {
             result
         } else {
             *gt

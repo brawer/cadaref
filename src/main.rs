@@ -22,6 +22,9 @@ pub fn main() -> Result<(), Box<dyn Error>> {
     let meters_per_pixel = 500.0 / pixels_per_meter;
     println!("Hello world {}", meters_per_pixel);
 
-    matcher.find_matches(meters_per_pixel);
+    if let Some((t, score)) = matcher.find_matches(meters_per_pixel) {
+        println!("{:?} {:?}", score, t);
+    }
+
     Ok(())
 }
