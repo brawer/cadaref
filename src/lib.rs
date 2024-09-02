@@ -1,6 +1,6 @@
 use bisection::bisect_left_by;
 use csv::Reader;
-use gdal::GeoTransform;
+use gdal::{raster::RasterCreationOptions, Dataset, DriverManager, GeoTransform};
 use gdal_sys::{GDALGCPsToGeoTransform, GDAL_GCP};
 use rstar::{primitives::GeomWithData, RTree};
 use serde::Deserialize;
@@ -244,6 +244,27 @@ impl Symbol {
         let y = gt[3] + self.x * gt[4] + self.y * gt[5];
         (x, y)
     }
+}
+
+pub fn write_geotiff(img: PathBuf, gt: &GeoTransform, out: PathBuf) -> Result<(), Box<dyn Error>> {
+    let img = Dataset::open(img)?;
+
+    // "cog" = Cloud-Optimized GeoTIFF
+    // https://gdal.org/en/latest/drivers/raster/cog.html
+    let driver = DriverManager::get_driver_by_name("cog")?;
+    let mut opts = RasterCreationOptions::new();
+    opts.set_name_value("NUM_THREADS", "ALL_CPUS")?;
+    opts.set_name_value("STATISTICS", "YES")?;
+    opts.set_name_value("PREDICTOR", "YES")?;
+    opts.set_name_value("COMPRESS", "DEFLATE")?;
+
+    let mut out = img.create_copy(&driver, out, &opts)?;
+    out.set_projection("epsg:2056")?; // epsg.io/2056 = Swiss CH1903+/LV95
+    out.set_geo_transform(gt)?;
+
+    out.close()?;
+    img.close()?;
+    Ok(())
 }
 
 fn read_points(path: PathBuf) -> Result<Vec<Point>, Box<dyn Error>> {
