@@ -246,8 +246,26 @@ impl Symbol {
     }
 }
 
-pub fn write_geotiff(img: PathBuf, gt: &GeoTransform, out: PathBuf) -> Result<(), Box<dyn Error>> {
-    let img = Dataset::open(img)?;
+pub fn write_geotiff(
+    img: PathBuf,
+    page: u32,
+    gt: &GeoTransform,
+    out: PathBuf,
+) -> Result<(), Box<dyn Error>> {
+    // GDAL supports opening multi-page TIFF, but the API is a little arcane:
+    // instead of making this an explicit API parameter, the desired page
+    // needs to be passed as part of the file name, using a special GTIFF_DIR
+    // prefix.
+    let img = if page <= 1 {
+        Dataset::open(img)?
+    } else {
+        let path = img.into_os_string().into_string();
+        if path.is_err() {
+            return Err("cannot convert OSString to Unicode string".into());
+        };
+        let path = path.unwrap();
+        Dataset::open(PathBuf::from(format!("GTIFF_DIR:{page}:{path}")))?
+    };
 
     // "cog" = Cloud-Optimized GeoTIFF
     // https://gdal.org/en/latest/drivers/raster/cog.html

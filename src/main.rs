@@ -17,6 +17,13 @@ struct Args {
 
     #[arg(value_hint=clap::ValueHint::FilePath)]
     image: PathBuf,
+
+    #[arg(
+		long,
+		default_value_t = 1,
+		value_parser = clap::value_parser!(u32).range(1..),
+	)]
+    page: u32,
 }
 
 pub fn main() -> Result<(), Box<dyn Error>> {
@@ -28,7 +35,7 @@ pub fn main() -> Result<(), Box<dyn Error>> {
     let meters_per_pixel = 500.0 / pixels_per_meter;
     if let Some((tr, score)) = matcher.find_matches(meters_per_pixel) {
         println!("{:?} {:?}", score, tr);
-        write_geotiff(args.image, &tr, args.output)?;
+        write_geotiff(args.image, args.page, &tr, args.output)?;
     }
 
     Ok(())
