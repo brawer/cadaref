@@ -136,7 +136,7 @@ impl Matcher {
                         if score.better_than(&best_score) {
                             best_transform = tr;
                             best_score = score;
-                            println!("best_score={:?}", score)
+                            // println!("best_score={:?}", score)
                         }
                     }
                     if let Some(tr) = make_transform(s1, p2, s2, p1) {
@@ -144,7 +144,7 @@ impl Matcher {
                         if score.better_than(&best_score) {
                             best_transform = tr;
                             best_score = score;
-                            println!("best_score={:?}", score);
+                            // println!("best_score={:?}", score);
                         }
                     }
                 }
