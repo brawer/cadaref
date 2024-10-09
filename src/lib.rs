@@ -76,7 +76,33 @@ impl Matcher {
     // an inlier.
     const MAX_DISTANCE_MM: i32 = 1000;
 
-    pub fn find_matches(&self, meters_per_pixel: f64) -> Option<(GeoTransform, Score)> {
+    pub fn find_transform(&self, dpi: u32, scales: &Vec<u32>) -> Option<GeoTransform> {
+        let mut best_transform = [0.0; 6];
+        let mut best_score = Score {
+            num_matches: 0,
+            avg_dist: 0.0,
+        };
+
+        for scale in scales {
+            if let Some((tr, score)) = self.find(dpi, *scale) {
+                if score.better_than(&best_score) {
+                    best_transform = tr;
+                    best_score = score;
+                }
+            }
+        }
+
+        if best_score.num_matches > 0 {
+            Some(best_transform)
+        } else {
+            None
+        }
+    }
+
+    fn find(&self, dpi: u32, scale: u32) -> Option<(GeoTransform, Score)> {
+        let pixels_per_meter = (dpi as f64) / 2.54 * 100.0;
+        let meters_per_pixel = (scale as f64) / pixels_per_meter;
+
         let num_symbols = self.symbols.len();
 
         let mut best_transform = [0.0; 6];
@@ -110,7 +136,7 @@ impl Matcher {
                         if score.better_than(&best_score) {
                             best_transform = tr;
                             best_score = score;
-                            // println!("best_score={:?}", score)
+                            println!("best_score={:?}", score)
                         }
                     }
                     if let Some(tr) = make_transform(s1, p2, s2, p1) {
@@ -118,7 +144,7 @@ impl Matcher {
                         if score.better_than(&best_score) {
                             best_transform = tr;
                             best_score = score;
-                            // println!("best_score={:?}", score);
+                            println!("best_score={:?}", score);
                         }
                     }
                 }
