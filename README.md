@@ -20,9 +20,9 @@ documents a significant part of the city’s construction history.
 To preserve this heritage, the archive was scanned to PDF, and then
 each scan got processed by a computer system that tries to find the
 precise geographic location for each map. As its output, Cadaref
-produces a [Cloud-Optimized GeoTIFF](http://cogeo.org/), an
+produces [Cloud-Optimized GeoTIFF](http://cogeo.org/), an
 industry-standard file format that is understood by Geographic
-Information System and similar tools.
+Information Systems and similar tools.
 
 
 ## Pipeline
@@ -68,9 +68,9 @@ pipeline that calls Cadaref for the Zürich project).
 
 ## Build
 
-For performance reasons, Cadaref is written in the Rust programming
-language. For development setup on Linux, have a look at the
-[Continuous Build](.github/workflows/ci.yml).
+For performance reasons, the core algorithm of Cadaref is written
+in the Rust programming language. To set up development on Linux,
+have a look at the [Continuous Build](.github/workflows/ci.yml).
 
 
 ## Usage
