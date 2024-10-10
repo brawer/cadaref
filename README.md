@@ -44,10 +44,10 @@ The cadaref tool takes the following arguments on the command line:
 
 * `--symbols` A set of map symbols, in CSV format like
   [this](testdata/symbols.csv). Typically detected by Computer Vision.
-  Symbol locations are passed in pixel coordinates,
+  Symbol locations are passed in (possibly fractional) pixel coordinates,
   relative to the top left of the image being processed.
 
-* `--symbols` A set of points on the globe, in CSV format like
+* `--points` A set of points on the globe, in CSV format like
   [this](testdata/points.csv). Typically extracted from a database
   of survey markers, or whatever else the paper maps may depict.
   Locations are passed in geographic coordinates. (The tool currently
