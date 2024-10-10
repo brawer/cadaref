@@ -15,7 +15,7 @@ struct Args {
     #[arg(short, long, value_hint=clap::ValueHint::FilePath)]
     output: PathBuf,
 
-    #[arg(value_hint=clap::ValueHint::FilePath)]
+    #[arg(long, value_hint=clap::ValueHint::FilePath)]
     image: PathBuf,
 
     #[arg(
