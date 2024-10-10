@@ -1,6 +1,6 @@
 use bisection::bisect_left_by;
 use csv::Reader;
-use gdal::{raster::RasterCreationOptions, Dataset, DriverManager, GeoTransform};
+use gdal::{raster::RasterCreationOptions, Dataset, DriverManager, GeoTransform, Metadata};
 use gdal_sys::{GDALGCPsToGeoTransform, GDAL_GCP};
 use rstar::{primitives::GeomWithData, RTree};
 use serde::Deserialize;
@@ -76,7 +76,7 @@ impl Matcher {
     // an inlier.
     const MAX_DISTANCE_MM: i32 = 1000;
 
-    pub fn find_transform(&self, dpi: u32, scales: &Vec<u32>) -> Option<GeoTransform> {
+    pub fn find_transform(&self, dpi: f64, scales: &Vec<u32>) -> Option<GeoTransform> {
         let mut best_transform = [0.0; 6];
         let mut best_score = Score {
             num_matches: 0,
@@ -99,8 +99,8 @@ impl Matcher {
         }
     }
 
-    fn find(&self, dpi: u32, scale: u32) -> Option<(GeoTransform, Score)> {
-        let pixels_per_meter = (dpi as f64) / 2.54 * 100.0;
+    fn find(&self, dpi: f64, scale: u32) -> Option<(GeoTransform, Score)> {
+        let pixels_per_meter = dpi / 2.54 * 100.0;
         let meters_per_pixel = (scale as f64) / pixels_per_meter;
 
         let num_symbols = self.symbols.len();
@@ -272,27 +272,53 @@ impl Symbol {
     }
 }
 
+// Calls GDAL to open a TIFF file, returning a GDAL Dataset.
+fn tiff_open(img: &PathBuf, page: u32) -> Result<Dataset, Box<dyn Error>> {
+    // GDAL supports opening multi-page TIFF, but the API is a little arcane:
+    // instead of making this an explicit API parameter, the desired page
+    // needs to be passed as part of the file name, using a special GTIFF_DIR
+    // prefix.
+    let path = <PathBuf as Clone>::clone(img);
+    let path = path.into_os_string().into_string();
+    if path.is_err() {
+        return Err("cannot convert OSString to Unicode string".into());
+    };
+    let path = path.unwrap();
+    let path = format!("GTIFF_DIR:{page}:{path}");
+    let img = Dataset::open(PathBuf::from(path))?;
+    Ok(img)
+}
+
+// Returns the resolution of the passed image in pixels per inch.
+pub fn image_resolution_dpi(img: &PathBuf, page: u32) -> Result<f64, Box<dyn Error>> {
+    let img = tiff_open(img, page)?;
+    const DEFAULT_DOMAIN: &str = ""; // namespace for GDAL metadata
+    let xres = img.metadata_item("TIFFTAG_XRESOLUTION", DEFAULT_DOMAIN);
+    let yres = img.metadata_item("TIFFTAG_YRESOLUTION", DEFAULT_DOMAIN);
+    let unit = img.metadata_item("TIFFTAG_RESOLUTIONUNIT", DEFAULT_DOMAIN);
+    img.close()?;
+
+    let unit_scale = match unit.unwrap_or(String::from("")).as_str() {
+        "2 (pixels/inch)" => 1.0,
+        "3 (pixels/cm)" => 2.54,
+        _ => Err("image does not specify a resolution unit")?,
+    };
+
+    let xres = xres.unwrap_or(String::from("72")).parse::<f64>()?;
+    let yres = yres.unwrap_or(String::from("72")).parse::<f64>()?;
+    if xres != yres {
+        return Err("x and y resolution must be the same".into());
+    }
+
+    Ok(xres * unit_scale)
+}
+
 pub fn write_geotiff(
     img: PathBuf,
     page: u32,
     gt: &GeoTransform,
     out: PathBuf,
 ) -> Result<(), Box<dyn Error>> {
-    // GDAL supports opening multi-page TIFF, but the API is a little arcane:
-    // instead of making this an explicit API parameter, the desired page
-    // needs to be passed as part of the file name, using a special GTIFF_DIR
-    // prefix.
-    let img = if page <= 1 {
-        Dataset::open(img)?
-    } else {
-        let path = img.into_os_string().into_string();
-        if path.is_err() {
-            return Err("cannot convert OSString to Unicode string".into());
-        };
-        let path = path.unwrap();
-        Dataset::open(PathBuf::from(format!("GTIFF_DIR:{page}:{path}")))?
-    };
-
     // "cog" = Cloud-Optimized GeoTIFF
     // https://gdal.org/en/latest/drivers/raster/cog.html
     let driver = DriverManager::get_driver_by_name("cog")?;
@@ -302,6 +328,7 @@ pub fn write_geotiff(
     opts.set_name_value("PREDICTOR", "YES")?;
     opts.set_name_value("COMPRESS", "DEFLATE")?;
 
+    let img = tiff_open(&img, page)?;
     let mut out = img.create_copy(&driver, out, &opts)?;
     out.set_projection("epsg:2056")?; // epsg.io/2056 = Swiss CH1903+/LV95
     out.set_geo_transform(gt)?;
@@ -503,5 +530,20 @@ mod tests {
         assert_eq!(dist[0], (19534, 1, 2));
         assert_eq!(dist[1], (1546818, 0, 2));
         assert_eq!(dist[2], (1562654, 0, 1));
+    }
+
+    #[test]
+    fn can_find_image_resolution_dpi() {
+        let mut path = std::env::current_dir().unwrap();
+        path.push("testdata");
+
+        path.push("HG3099.tif");
+        assert_eq!(image_resolution_dpi(&path, 1).unwrap(), 300.0);
+
+        path.set_file_name("500_pixels_per_cm.tif");
+        assert_eq!(image_resolution_dpi(&path, 1).unwrap(), 1270.0);
+
+        path.set_file_name("different_x_and_y_resolution.tif");
+        assert_eq!(image_resolution_dpi(&path, 1).is_err(), true);
     }
 }
