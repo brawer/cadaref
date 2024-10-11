@@ -55,9 +55,8 @@ such as resolution enhancement and
 [Ōtsu thresholding](https://en.wikipedia.org/wiki/Otsu's_method).
 
 3. The pipeline uses Computer Vision to recognize
-[cartographic symbols](https://github.com/brawer/cadasym).
-The detected symbols are stored to a CSV file
-[like this](testdata/symbols.csv).
+[cartographic symbols](https://github.com/brawer/cadasym) and stores
+them in a CSV file [like this](testdata/symbols.csv).
 
 4. Separately, the processing pipeline also tries to find the
 approximate geographic area of the map in question. For example,
@@ -66,14 +65,14 @@ Recognition](https://en.wikipedia.org/wiki/Optical_character_recognition)
 is used to extract parcel numbers. This pipeline uses this to find
 what fixed points and [survey
 markers](https://en.wikipedia.org/wiki/Survey_marker) might have
-existed in the approximate area of the historical map at the time the
+existed in the approximate area of the historical map, at the time the
 map was drawn. The result is another CSV file [like
 this](testdata/points.csv).
 
-5. By means of Optical Character Recognition, the pipeline tries
+5. Again utilizing Optical Character Recognition, the pipeline tries
 to extract the map scale, which was often printed on the historical maps.
-If OCR doesn’t give a result, the pipeline assumes a set of map scales that
-were commonly used across the dataset.
+If OCR doesn’t give a credible result, the pipeline falls back to a set
+of common map scales.
 
 6. The pipeline passes the results of its earlier steps
 (the rasterized historical map,
