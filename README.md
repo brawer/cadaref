@@ -1,10 +1,21 @@
 # Cadaref
 
 Cadaref is a key component of a [larger
-pipeline](https://github.com/brawer/cadaref-zurich), initially built
-for the City of Zürich, for automatic
-[georeferencing](https://en.wikipedia.org/wiki/Georeferencing)
-of historic [cadastral maps](https://en.wikipedia.org/wiki/Cadastre).
+pipeline](https://github.com/brawer/cadaref-zurich), built
+for the City of Zürich to automatically
+[georeference](https://en.wikipedia.org/wiki/Georeferencing)
+historical [cadastral maps](https://en.wikipedia.org/wiki/Cadastre).
+Cadaref matches cartographic symbols against geographic points
+to produce a cloud-optimized georeferenced TIFF image.
+In the Zürich project, the cartographic symbols were found
+on archived maps by means of Computer Vision, and the geographic
+locations were taken from a database of survey points.
+Cadaref’s matching algorithm is resilient to noisy data such as
+demolished points or errors in symbol recognition, which helps
+to bridge the time gap when matching decade-old maps against
+a digital dataset of the early 21th century.
+
+
 
 ![scan](./doc/sample.png)
 
@@ -14,7 +25,7 @@ For most of the 20th century, each change to a land parcel in Zürich
 got documented on a paper map. Likewise, as in the image above,
 changes to building footprints were documented in a similar way.
 Today, this record keeping is fully digital, but the City of Zürich
-still has about 100K paper maps in its archive. This collection
+still has about 100K paper maps in its archive. This maps collection
 documents a significant part of the city’s construction history.
 
 To preserve this heritage, the archive was scanned to PDF, and then
@@ -66,11 +77,18 @@ release it independently. (See
 pipeline that calls Cadaref for the Zürich project).
 
 
-## Build
+## Algorithm
 
-For performance reasons, the core algorithm of Cadaref is written
-in the Rust programming language. To set up development on Linux,
-have a look at the [Continuous Build](.github/workflows/ci.yml).
+The matching alorithm is described [here](docs/algorithm.md).
+
+
+## Development
+
+Please feel free to contribute to this project; simply send your
+changes as a pull request. To set up your development environment,
+have a look at the [Continuous Build](.github/workflows/ci.yml)
+which builds and tests every change.
+
 
 
 ## Usage
