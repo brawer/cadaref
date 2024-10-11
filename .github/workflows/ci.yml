@@ -25,8 +25,8 @@ jobs:
           sudo apt-get install -y podman
       - name: Check out project sources
         uses: actions/checkout@v4
-    - name: Build and test container
-      run: podman build -f Containerfile -t cadaref-build-test
+      - name: Build and test container
+        run: podman build -f Containerfile -t cadaref-build-test
 
   Ubuntu:
     runs-on: ubuntu-24.04
