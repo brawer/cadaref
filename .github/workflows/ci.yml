@@ -1,3 +1,11 @@
+# SPDX-FileCopyrightText: 2024 Sascha Brawer <sascha@brawer.ch>
+# SPDX-License-Identifier: MIT
+#
+# Configuration for Continuous Integration on GitHub. We currently
+# test every change on two platforms: Ubuntu Linux, which is popular
+# with GIS people, and (containerized) Alpine Linux, which is typically
+# used in cloud environments because of its lightweight size.
+
 name: Build & Test
 
 on:
@@ -8,8 +16,19 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build_and_test:
-    name: Ubuntu Linux
+  Alpine:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Set up machine
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y podman
+      - name: Check out project sources
+        uses: actions/checkout@v4
+    - name: Build and test container
+      run: podman build -f Containerfile -t cadaref-build-test
+
+  Ubuntu:
     runs-on: ubuntu-24.04
     steps:
       - name: Set up machine
