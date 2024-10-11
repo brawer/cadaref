@@ -42,11 +42,10 @@ Information Systems and similar tools.
 ## Pipeline
 
 For the Zürich project, we built a [driver
-pipeline](https://github.com/brawer/cadaref-zurich); this codebase is
-unlikely to be useful for other projects.  Ultimately, though, it
-calls Cadaref (the tool you’re looking at) for georeferencing, and
-this core might well be reusable. Just for context, here’s how
-the driver pipeline works.
+pipeline](https://github.com/brawer/cadaref-zurich) whose codebase is
+unlikely to be useful in other projects. Just for context, here’s how
+this driver pipeline works. Ultimately, it invokes Cadaref, the tool
+you’re looking at right now.
 
 1. The driver pipeline starts by rendering the archival files,
 which are supplied as compressed files in [PDF/A format](httpsa://en.wikipedia.org/wiki/PDF/A), to raster images in TIFF format.
@@ -87,7 +86,7 @@ for georeferencing.
 
 ## Algorithm
 
-Cadaref’s matching alorithm is described [here](docs/algorithm.md).
+Cadaref’s matching alorithm is described [here](doc/algorithm.md).
 
 
 ## Development
