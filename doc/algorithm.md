@@ -64,11 +64,14 @@ In a preparation step, we build the following data structures:
 Euclidean distance to the top left corner (origin)
 of the scanned map image.
 
-2. A table with the distance in millimeters between every pair of
-geographic points.
+2. A sorted table with the distance (in millimeters) between every pair
+of geographic points. We will use this table to find all point pairs
+whose distance is within a buffer (±1 meter) around a query distance.
+To implement this range query, we do a binary search for the lower limit.
+Then, we iterate over the table entries until we raech the upper limit.
 
 3. An [R*-tree](https://en.wikipedia.org/wiki/R*-tree) for efficiently
-finding the geographic points in proximity of query location.
+finding geographic points near a query location.
 
 
 ## Matching
