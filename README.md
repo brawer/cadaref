@@ -6,18 +6,21 @@ for the City of Zürich to automatically
 [georeference](https://en.wikipedia.org/wiki/Georeferencing)
 historical [cadastral maps](https://en.wikipedia.org/wiki/Cadastre).
 Cadaref matches cartographic symbols against geographic points
-to produce a cloud-optimized georeferenced TIFF image.
+to produce cloud-optimized GeoTIFF images.
+
 In the Zürich project, the cartographic symbols were found
 on archived maps by means of Computer Vision, and the geographic
-locations were taken from a database of survey points.
-Cadaref’s matching algorithm is resilient to noisy data such as
-demolished points or errors in symbol recognition, which helps
-to bridge the time gap when matching decade-old maps against
-a digital dataset of the early 21th century.
+locations were taken from a database of survey points. It does
+not really matter though; Cadaref is just matching point sets.
 
-
+Cadaref’s matching algorithm is resilient to noisy data.
+This helps to overcome the limitations of computer vision
+in symbol recognition, and it also helps to bridge the time gap
+between decade-old historical maps and the earliest digitally
+available data.
 
 ![scan](./doc/sample.png)
+
 
 ## Context
 
@@ -73,24 +76,29 @@ to extract the map scale, which was often printed on the historical maps.
 If OCR doesn’t give a result, the pipeline assumes a set of map scales that
 were commonly used across the dataset.
 
-6. The output of the previosu stems (the rasterized historical map,
+6. The pipeline passes the results of its earlier steps
+(the rasterized historical map,
 the recognized cartographic symbols, the survey markers and fixed points
-at the maps’s approximate time and region, and the detected map scale)
-are all passed to Cadaref. The Cadaref tool tries to find a suitable
-projection. If successful, it generates a Cloud-Optimized GeoTIFF image.
+likely to have been depicted by the map, and the detected map scale)
+to Cadaref, which tries to find a suitable projection. If successful,
+Cadaref generates a Cloud-Optimized GeoTIFF image with embedded tags
+for georeferencing.
 
 
 ## Algorithm
 
-The matching alorithm is described [here](docs/algorithm.md).
+Cadaref’s matching alorithm is described [here](docs/algorithm.md).
 
 
 ## Development
 
-Please feel free to contribute to this project; simply send your
-changes as a pull request. To set up your development environment,
+Please feel free to contribute to this project; simply send
+a pull request. To set up your development environment,
 have a look at the [Continuous Build](.github/workflows/ci.yml)
-which builds and tests every change.
+which builds and tests every change. The codebase gets automatically
+tested on two Linux distributions, Ubuntu and Alpine Linux. However,
+development on other platforms such as macOS or Windows should
+be straightforward.
 
 
 
