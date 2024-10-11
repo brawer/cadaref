@@ -127,7 +127,7 @@ match some survey point. Otherwise, if there’s too many outliers,
 we give up.
 
 8. By construction, our transformation will be perfect for the matches
-A–P and B–Q (or A–Q and B–P) chosen in step 4, and petty good (less than
+A–P and B–Q (or A–Q and B–P) chosen in step 4, and pretty good (less than
 1 meter off) for all other inliers. Let’s try to redistribute this error
 residual. Actually, now that we have established which cartographic symbol
 corresponds to what survey marker, we can simpoly treat this like aerial
