@@ -127,12 +127,13 @@ match some survey point. Otherwise, if there’s too many outliers,
 we give up.
 
 8. By construction, our transformation will be perfect for the matches
-A–P and B–Q (or A–Q and B–P) chosen in step 4, and pretty good (less than
-1 meter off) for all other inliers. Let’s try to redistribute this error
-residual. Actually, now that we have established which cartographic symbol
-corresponds to what survey marker, we can simpoly treat this like aerial
-imagery to be rectified with Ground Control Points. This is a standard
-problem in geographic information processing, so we simply delegate this
-refinement step to the [GDAL library](
-we can deleg GDAL library, specifically its function
-[GCPsToGeoTransform()](https://gdal.org/en/release-3.9/doxygen/gdal_8h.html#ae6bc0eeea40d1645fbd44d7431c8db07).
+A–P and B–Q (or A–Q and B–P) chosen in step 4, and less than 1 meter
+off for all other inliers. We try to redistribute the error residual
+to all inliers. Actually, now that we have established which map symbol
+corresponds to what survey marker, we have reduced our problem to
+georeferencing imagery with Ground Control Points. This is a standard
+task in geographic information processing, and we can simply
+delegate this to the [GDAL library](https://gdal.org/) which has
+an implementation in
+[GCPsToGeoTransform()](https://gdal.org/en/release-3.9/doxygen/gdal_8h.html#ae6bc0eeea40d1645fbd44d7431c8db07). We compare the quality of GDAL’s
+re-estimation with our own transform and take the better of the two.
