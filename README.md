@@ -38,43 +38,46 @@ Information Systems and similar tools.
 
 ## Pipeline
 
-After some image pre-processing (such as resolution enhancement and
-thresholding), our [driver
-pipeline](https://github.com/brawer/cadaref-zurich) uses Computer
-Vision to recognize certain [cartographic
-symbols](https://github.com/brawer/cadasym).  For example, in the map
-above, the small white circles stand for one particular type of
-boundary point; on the ground, their location is marked [small metal
-disks](https://en.wikipedia.org/wiki/Survey_marker). When the Computer
-Vision part of the pipeline looks at a map, it produces a [CSV file
-with the recognized map symbols](testdata/symbols.csv), listing the
-symbol type and image coordinates. (Since our Computer Vision
-component works on an enhanced-resolution version of the image, the
-resulting pixel coordinates can be fractional).
+For the Zürich project, we built a [driver
+pipeline](https://github.com/brawer/cadaref-zurich); this codebase is
+unlikely to be useful for other projects.  Ultimately, though, it
+calls Cadaref (the tool you’re looking at) for georeferencing, and
+this core might well be reusable. Just for context, here’s how
+the driver pipeline works.
 
-Separately, the processing pipeline also tries to find the
+1. The driver pipeline starts by rendering the archival files,
+which are supplied as compressed files in [PDF/A format](httpsa://en.wikipedia.org/wiki/PDF/A), to raster images in TIFF format.
+
+2. The pipeline applies image processing techniques
+such as resolution enhancement and
+[Ōtsu thresholding](https://en.wikipedia.org/wiki/Otsu's_method).
+
+3. The pipeline uses Computer Vision to recognize
+[cartographic symbols](https://github.com/brawer/cadasym).
+The detected symbols are stored to a CSV file
+[like this](testdata/symbols.csv).
+
+4. Separately, the processing pipeline also tries to find the
 approximate geographic area of the map in question. For example,
-[Optical Character Recognition](https://en.wikipedia.org/wiki/Optical_character_recognition) is used to extract text like parcel numbers.
-Next, the pipeline queries today’s land survey database
-for the survey points in the presumed map area, and stores
-the result in another [CSV file with geographic points](testdata/points.csv).
+[Optical Character
+Recognition](https://en.wikipedia.org/wiki/Optical_character_recognition)
+is used to extract parcel numbers. This pipeline uses this to find
+what fixed points and [survey
+markers](https://en.wikipedia.org/wiki/Survey_marker) might have
+existed in the approximate area of the historical map at the time the
+map was drawn. The result is another CSV file [like
+this](testdata/points.csv).
 
-Often enough, but not always, the symbols on the historical map
-correspond to things (survey markers, fix points) that still
-exist today. However, it is not obvious which map symbol corresponds
-to what geographic point. We can only guess the rough geographic
-area; many of the maps are rotated; neither symbol recognition nor
-OCR are perfectly accurate; and the physical points may have been
-demolished some time between the map was drawn and today.
-To georeference the historical maps despite all these complications,
-we need some kind of fuzzy match. This is exactly what Cadaref does.
+5. By means of Optical Character Recognition, the pipeline tries
+to extract the map scale, which was often printed on the historical maps.
+If OCR doesn’t give a result, the pipeline assumes a set of map scales that
+were commonly used across the dataset.
 
-GeoTIFF image with embedded transformation parameters.  While this
-processing pipeline is very specific to the City of Zürich, the
-matching tool might be useful for other projects, which is why we
-release it independently. (See
-[here](
-pipeline that calls Cadaref for the Zürich project).
+6. The output of the previosu stems (the rasterized historical map,
+the recognized cartographic symbols, the survey markers and fixed points
+at the maps’s approximate time and region, and the detected map scale)
+are all passed to Cadaref. The Cadaref tool tries to find a suitable
+projection. If successful, it generates a Cloud-Optimized GeoTIFF image.
 
 
 ## Algorithm
@@ -123,4 +126,4 @@ Cadaref is a command-line tool that takes the following arguments:
 If everything goes well, the tool returns with status code 0.
 In case of failures, in particular if the matching algorithm could
 not find a good enough transformation, the tool returns with a non-zero
-status code.
+exit code.
