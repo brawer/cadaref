@@ -93,7 +93,8 @@ scale and the image resolution. For example, on a 1:500 map scanned at
 300 dpi, the width of a single map pixel corresponds to a real-world
 distance of 42.3 millimeters; if two symbols on this map have a
 distance of 791 raster pixels, the depicted locations would be
-33486 millimeters away from each other.
+33486 millimeters away from each other. For numerical stability,
+we ignore symbol pairs that are very near to each other.
 
 3. Next, we look for pairs of geographic points with roughly this
 distance.  To allow for drawing and scanning inaccuracies, we search

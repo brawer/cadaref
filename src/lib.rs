@@ -122,6 +122,15 @@ impl Matcher {
                 let s1 = &self.symbols[i];
                 let s2 = &self.symbols[j];
                 let dist_mm = s1.distance_mm(s2, meters_per_pixel);
+
+                // If the two map symbols S1 and S2 are very near each other,
+                // we ignore the pair because the computated transform would
+                // not be accurate.
+                if dist_mm < 10000 {
+                    // 10 meters
+                    continue;
+                }
+
                 let min_dist_mm = dist_mm - Self::MAX_DISTANCE_MM;
                 let max_dist_mm = dist_mm + Self::MAX_DISTANCE_MM;
                 let start = bisect_left_by(&self.point_distances, |p| p.0.cmp(&min_dist_mm));
