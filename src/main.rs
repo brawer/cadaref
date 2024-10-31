@@ -41,6 +41,8 @@ pub fn main() -> Result<(), Box<dyn Error>> {
     let dpi = image_resolution_dpi(&args.image, args.page)?;
     if let Some(tr) = matcher.find_transform(dpi, &args.scales) {
         write_geotiff(args.image, args.page, &tr, args.output)?;
+    } else {
+        return Err("no match found".into());
     }
 
     Ok(())
