@@ -2,7 +2,7 @@ use clap::Parser;
 use std::error::Error;
 use std::path::PathBuf;
 
-use cadaref::{image_resolution_dpi, write_geotiff, Matcher};
+use cadaref::{image_resolution_dpi, image_size, write_geotiff, Matcher};
 
 #[derive(Parser, Debug)]
 struct Args {
@@ -37,8 +37,9 @@ struct Args {
 
 pub fn main() -> Result<(), Box<dyn Error>> {
     let args = Args::parse();
-    let matcher = Matcher::new(args.points, args.symbols)?;
     let dpi = image_resolution_dpi(&args.image, args.page)?;
+    let size = image_size(&args.image, args.page)?;
+    let matcher = Matcher::new(args.points, args.symbols, size)?;
     if let Some(tr) = matcher.find_transform(dpi, &args.scales) {
         write_geotiff(args.image, args.page, &tr, args.output)?;
     } else {
