@@ -2,6 +2,7 @@ use bisection::bisect_left_by;
 use csv::Reader;
 use gdal::{raster::RasterCreationOptions, Dataset, DriverManager, GeoTransform, Metadata};
 use gdal_sys::{GDALGCPsToGeoTransform, GDAL_GCP};
+use geo::{point, AffineTransform};
 use rstar::{primitives::GeomWithData, RTree};
 use serde::Deserialize;
 use std::error::Error;
@@ -55,9 +56,9 @@ impl Matcher {
         symbols: PathBuf,
         image_size: (usize, usize),
     ) -> Result<Self, Box<dyn Error>> {
-        let _height = image_size.1;
+        let height = image_size.1;
         let points = read_points(points)?;
-        let symbols = read_symbols(symbols)?;
+        let symbols = read_symbols(symbols, height)?;
 
         let nodes = points
             .iter()
@@ -351,9 +352,18 @@ pub fn write_geotiff(
     opts.set_name_value("COMPRESS", "DEFLATE")?;
 
     let img = tiff_open(&img, page)?;
+    let height = img.raster_size().1;
     let mut out = img.create_copy(&driver, out, &opts)?;
     out.set_projection("epsg:2056")?; // epsg.io/2056 = Swiss CH1903+/LV95
-    out.set_geo_transform(gt)?;
+
+    // Without this, the image would be flipped on its head.
+    let origin = point!(x: 0.0, y: 0.0);
+    let mirrored = AffineTransform::identity()
+        .scaled(1.0, -1.0, origin)
+        .translated(0.0, height as f64)
+        .compose(&gdal_to_affine(gt));
+    let mirrored_gt = affine_to_gdal(&mirrored);
+    out.set_geo_transform(&mirrored_gt)?;
 
     out.close()?;
     img.close()?;
@@ -393,11 +403,12 @@ fn sort_points(points: &mut [Point]) {
     });
 }
 
-fn read_symbols(path: PathBuf) -> Result<Vec<Symbol>, Box<dyn Error>> {
+fn read_symbols(path: PathBuf, image_height: usize) -> Result<Vec<Symbol>, Box<dyn Error>> {
     let mut symbols = Vec::new();
     let mut reader = Reader::from_reader(File::open(path)?);
     for rec in reader.deserialize() {
-        let p: Symbol = rec?;
+        let mut p: Symbol = rec?;
+        p.y = (image_height as f64) - p.y;
         symbols.push(p);
     }
     sort_symbols(&mut symbols);
@@ -438,17 +449,40 @@ fn make_gcp(s: &Symbol, p: &Point) -> GDAL_GCP {
     }
 }
 
+fn affine_to_gdal(tr: &geo::AffineTransform) -> GeoTransform {
+    [tr.xoff(), tr.a(), tr.b(), tr.yoff(), tr.d(), tr.e()]
+}
+
+fn gdal_to_affine(gt: &GeoTransform) -> geo::AffineTransform {
+    geo::AffineTransform::new(gt[1], gt[2], gt[0], gt[4], gt[5], gt[3])
+}
+
 // Create a GDAL transform. Returns None for some corner cases,
 // such as two symbols having the exact same y coordinate.
 fn make_transform(s1: &Symbol, p1: &Point, s2: &Symbol, p2: &Point) -> Option<GeoTransform> {
-    let mut result = [0.0; 6];
-    let gcps = [make_gcp(s1, p1), make_gcp(s2, p2)];
-    let ok = unsafe { GDALGCPsToGeoTransform(2, gcps.as_ptr(), result.as_mut_ptr(), 0) != 0 };
-    if ok {
-        Some(result)
-    } else {
-        None
+    let angle_symbols = (s2.y - s1.y).atan2(s2.x - s1.x);
+    let angle_points = (p2.y - p1.y).atan2(p2.x - p1.x);
+    let rotation_angle = angle_points - angle_symbols;
+
+    let dx_symbols = s2.x - s1.x;
+    let dy_symbols = s2.y - s1.y;
+    let symbols_distance = (dx_symbols * dx_symbols + dy_symbols * dy_symbols).sqrt();
+    if symbols_distance < 1e-5 {
+        return None;
     }
+
+    let dx_points = p2.x - p1.x;
+    let dy_points = p2.y - p1.y;
+    let points_distance = (dx_points * dx_points + dy_points * dy_points).sqrt();
+    let scale = points_distance / symbols_distance;
+
+    let origin = point!(x: 0.0, y: 0.0);
+    let transform = AffineTransform::translate(-s1.x, -s1.y)
+        .scaled(scale, scale, origin)
+        .rotated(rotation_angle.to_degrees(), origin)
+        .translated(p1.x, p1.y);
+
+    Some(affine_to_gdal(&transform))
 }
 
 fn build_point_distances(pts: &[Point]) -> PointDistances {
@@ -470,6 +504,48 @@ fn build_point_distances(pts: &[Point]) -> PointDistances {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn projected_distance(gt: &GeoTransform, s: &Symbol, p: &Point) -> f64 {
+        let (x, y) = s.project(&gt);
+        let (dx, dy) = (p.x - x, p.y - y);
+        (dx * dx + dy * dy).sqrt()
+    }
+
+    #[test]
+    fn can_make_transform() {
+        let s1 = Symbol {
+            x: 324.25,
+            y: 2365.5,
+        };
+        let s2 = Symbol {
+            x: 809.25,
+            y: 226.75,
+        };
+        let s3 = Symbol {
+            x: 2230.0,
+            y: 2069.75,
+        };
+        let p1 = Point {
+            id: "WP1558".to_string(),
+            x: 2682344.589,
+            y: 1250230.509,
+        };
+        let p2 = Point {
+            id: "WPA2533".to_string(),
+            x: 2682380.213,
+            y: 1250144.927,
+        };
+        let p3 = Point {
+            id: "WP1557".to_string(),
+            x: 2682426.131,
+            y: 1250231.743,
+        };
+
+        let gt = make_transform(&s1, &p1, &s2, &p2).unwrap();
+        assert!(projected_distance(&gt, &s1, &p1) < 1.0);
+        assert!(projected_distance(&gt, &s2, &p2) < 1.0);
+        assert!(projected_distance(&gt, &s3, &p3) < 1.0);
+    }
 
     #[test]
     fn can_sort_symbols() {
@@ -579,5 +655,12 @@ mod tests {
 
         path.set_file_name("500_pixels_per_cm.tif");
         assert_eq!(image_size(&path, 1).unwrap(), (1, 1));
+    }
+
+    #[test]
+    fn can_roundtrip_gdal_to_affine() {
+        let gt = [1., 2., 3., 4., 5., 6.];
+        let gt2 = affine_to_gdal(&gdal_to_affine(&gt));
+        assert_eq!(gt, gt2);
     }
 }
