@@ -50,7 +50,12 @@ impl Score {
 }
 
 impl Matcher {
-    pub fn new(points: PathBuf, symbols: PathBuf) -> Result<Self, Box<dyn Error>> {
+    pub fn new(
+        points: PathBuf,
+        symbols: PathBuf,
+        image_size: (usize, usize),
+    ) -> Result<Self, Box<dyn Error>> {
+        let _height = image_size.1;
         let points = read_points(points)?;
         let symbols = read_symbols(symbols)?;
 
@@ -296,6 +301,14 @@ fn tiff_open(img: &PathBuf, page: u32) -> Result<Dataset, Box<dyn Error>> {
     let path = format!("GTIFF_DIR:{page}:{path}");
     let img = Dataset::open(PathBuf::from(path))?;
     Ok(img)
+}
+
+// Returns the size of the passed image in pixels.
+pub fn image_size(img: &PathBuf, page: u32) -> Result<(usize, usize), Box<dyn Error>> {
+    let img = tiff_open(img, page)?;
+    let result = img.raster_size();
+    img.close()?;
+    Ok(result)
 }
 
 // Returns the resolution of the passed image in pixels per inch.
@@ -554,5 +567,17 @@ mod tests {
 
         path.set_file_name("different_x_and_y_resolution.tif");
         assert_eq!(image_resolution_dpi(&path, 1).is_err(), true);
+    }
+
+    #[test]
+    fn can_find_image_size() {
+        let mut path = std::env::current_dir().unwrap();
+        path.push("testdata");
+
+        path.push("HG3099.tif");
+        assert_eq!(image_size(&path, 1).unwrap(), (2464, 3492));
+
+        path.set_file_name("500_pixels_per_cm.tif");
+        assert_eq!(image_size(&path, 1).unwrap(), (1, 1));
     }
 }
